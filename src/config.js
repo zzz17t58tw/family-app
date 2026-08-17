@@ -1,6 +1,6 @@
 // Google OAuth 設定
 // TODO: 填入你的 OAuth Client ID（建立後貼到這裡）
-export const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID = '571410634682-1s7aqci429g3nin2ga8kctf7kdcao1lr.apps.googleusercontent.com';
 
 // 需要的 Google API 權限
 export const GOOGLE_SCOPES = [
