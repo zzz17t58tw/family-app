@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './index.css';
 import { initGoogleAuth, signIn, signOut, isSignedIn, setTokenChangeHandler } from './googleAuth';
 import { loadData, saveData } from './drive';
-import { DEMO_DATA, APP_VERSION } from './config';
+import { DEMO_DATA, APP_VERSION, CHANGELOG } from './config';
 
 // ── 工具函數 ──
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -75,6 +75,7 @@ function DashboardPage({ data }) {
   const assets = totalAssets(data);
   const { income, expense } = monthlySummary(data);
   const liquid = liquidFunds(data);
+  const [showChangelog, setShowChangelog] = useState(false);
   const recent = [...(data.transactions || [])].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 8);
   return (
     <div>
@@ -122,7 +123,17 @@ function DashboardPage({ data }) {
           </table>
         </div>
       </div>
-      <div style={{ position: 'fixed', top: 16, right: 20, fontSize: 12, color: 'var(--text-muted)', zIndex: 10 }}>版本 {APP_VERSION}</div>
+      <div style={{ position: 'fixed', top: 16, right: 20, zIndex: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>版本 {APP_VERSION}</span>
+        <button onClick={() => setShowChangelog(prev => !prev)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>ℹ️</button>
+        {showChangelog && (
+          <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 8, background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 6, padding: 10, maxHeight: 300, overflowY: 'auto', zIndex: 11, boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: 12 }}>
+            {CHANGELOG.slice(0, 10).map((log, i) => (
+              <div key={i} style={{ marginBottom: 4 }}>{log.version}  {log.desc}</div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -210,6 +221,10 @@ function AccountsPage({ data, onUpdate }) {
     onUpdate({ ...data, accounts: [...data.accounts, { id: genId(), name: newAcc.name, type: newAcc.type, balance: bal }] });
     setNewAcc({ name: '', type: 'bank', balance: '' });
   }
+  function deleteAccount(id, name) {
+    if (!window.confirm('確定刪除「' + name + '」？')) return;
+    onUpdate({ ...data, accounts: data.accounts.filter(a => a.id !== id) });
+  }
   return (
     <div>
       <div className="page-header"><h1 className="page-title">帳戶管理</h1><p className="page-subtitle">管理帳戶餘額與轉帳</p></div>
@@ -218,6 +233,9 @@ function AccountsPage({ data, onUpdate }) {
           <div key={a.id} className="stat-card">
             <div className="stat-card-header"><span className="stat-card-label">{a.name}</span><div className={`stat-card-icon ${a.type === 'bank' ? 'assets' : a.type === 'wallet' ? 'savings' : 'income'}`}>{a.type === 'bank' ? '🏦' : a.type === 'wallet' ? '💳' : '📈'}</div></div>
             <div className="stat-card-value">{fmt(a.balance)}</div>
+            <div style={{ padding: '0 12px 10px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => deleteAccount(a.id, a.name)}>刪除</button>
+            </div>
           </div>
         ))}
       </div>
@@ -472,8 +490,7 @@ function App() {
     });
   }, []);
 
-  async function updateData(updater) {
-    const newData = updater(data);
+  async function updateData(newData) {
     setData(newData);
     if (signedIn) {
       try { await saveData(newData); setError(null); }
