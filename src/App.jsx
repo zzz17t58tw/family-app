@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './index.css';
 import { initGoogleAuth, signIn, signOut, isSignedIn, setTokenChangeHandler } from './googleAuth';
 import { loadData, saveData } from './drive';
+import { DEMO_DATA } from './config';
 
 // ── 工具函數 ──
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -24,28 +25,8 @@ function monthlySummary(data) {
   return { income, expense, saving: income > 0 ? Math.round((income - expense) / income * 1000) / 10 : 0 };
 }
 
-// ── 登入頁 ──
-function LoginScreen({ onSignIn, error }) {
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}>
-      <div className="card" style={{ maxWidth: 420, width: '90%', textAlign: 'center', padding: '40px 32px' }}>
-        <div style={{ fontSize: 48 }}>💎</div>
-        <h1 style={{ margin: '12px 0 8px' }}>Family Finance</h1>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>家庭財務管理 · 登入 Google 帳戶即可使用</p>
-        {error && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</p>}
-        <button className="btn btn-primary" onClick={onSignIn} style={{ width: '100%', padding: '14px', fontSize: 16 }}>
-          使用 Google 帳戶登入
-        </button>
-        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 16 }}>
-          財務資料儲存在你自己的 Google 雲端硬碟，登入才看得到
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // ── 側邊欄 ──
-function Sidebar({ activePage, setActivePage, onSignOut }) {
+function Sidebar({ activePage, setActivePage, signedIn, onSignIn, onSignOut }) {
   const navItems = [
     { id: 'dashboard', label: '儀表板', icon: '📊' },
     { id: 'transactions', label: '交易記錄', icon: '💰' },
@@ -75,7 +56,11 @@ function Sidebar({ activePage, setActivePage, onSignOut }) {
         </div>
       </nav>
       <div style={{ padding: '16px' }}>
-        <button className="btn btn-secondary" style={{ width: '100%' }} onClick={onSignOut}>登出</button>
+        {signedIn ? (
+          <button className="btn btn-secondary" style={{ width: '100%' }} onClick={onSignOut}>登出</button>
+        ) : (
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={onSignIn}>登入 Google 帳戶</button>
+        )}
       </div>
     </div>
   );
@@ -415,17 +400,27 @@ function LoansPage({ data, onUpdate }) {
 }
 
 // ── 設定 ──
-function SettingsPage({ onSignOut, onRefresh, error }) {
+function SettingsPage({ signedIn, onSignIn, onSignOut, onRefresh, error }) {
   return (
     <div>
       <div className="page-header"><h1 className="page-title">設定</h1><p className="page-subtitle">帳戶與同步</p></div>
       <div className="card" style={{ maxWidth: 480 }}>
         <div className="card-header"><h3 className="card-title">帳戶</h3></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '0 20px 20px' }}>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>財務資料儲存在你的 Google 雲端硬碟「family app」資料夾</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+            {signedIn
+              ? '財務資料已連線到你的 Google 雲端硬碟「family app」資料夾'
+              : '目前是訪客模式（示範資料）。登入後財務資料會儲存到你的 Google 雲端硬碟'}
+          </p>
           {error && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</p>}
-          <button className="btn btn-secondary" onClick={onRefresh}>重新載入資料</button>
-          <button className="btn btn-secondary" style={{ color: 'var(--danger)' }} onClick={onSignOut}>登出</button>
+          {signedIn ? (
+            <>
+              <button className="btn btn-secondary" onClick={onRefresh}>重新載入資料</button>
+              <button className="btn btn-secondary" style={{ color: 'var(--danger)' }} onClick={onSignOut}>登出</button>
+            </>
+          ) : (
+            <button className="btn btn-primary" onClick={onSignIn}>登入 Google 帳戶</button>
+          )}
         </div>
       </div>
     </div>
@@ -434,14 +429,13 @@ function SettingsPage({ onSignOut, onRefresh, error }) {
 
 // ── 主應用程式 ──
 function App() {
-  const [authState, setAuthState] = useState('loading');
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(() => JSON.parse(JSON.stringify(DEMO_DATA)));
+  const [signedIn, setSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activePage, setActivePage] = useState('dashboard');
 
   async function loadUserData() {
-    setAuthState('signedIn');
     setLoading(true);
     setError(null);
     try {
@@ -456,27 +450,29 @@ function App() {
 
   useEffect(() => {
     setTokenChangeHandler(async (token) => {
-      if (token) await loadUserData();
-      else { setAuthState('signedOut'); setData(null); }
+      if (token) {
+        setSignedIn(true);
+        await loadUserData();
+      } else {
+        setSignedIn(false);
+        setData(JSON.parse(JSON.stringify(DEMO_DATA)));
+      }
     });
     initGoogleAuth(() => {
-      if (isSignedIn()) loadUserData();
-      else setAuthState('signedOut');
+      if (isSignedIn()) {
+        setSignedIn(true);
+        loadUserData();
+      }
     });
   }, []);
 
   async function updateData(updater) {
     const newData = updater(data);
     setData(newData);
-    try { await saveData(newData); setError(null); }
-    catch (e) { setError('儲存失敗：' + e.message); }
-  }
-
-  if (authState === 'loading') {
-    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}><p style={{ color: 'var(--text-secondary)' }}>載入中…</p></div>;
-  }
-  if (authState === 'signedOut') {
-    return <LoginScreen onSignIn={signIn} error={error} />;
+    if (signedIn) {
+      try { await saveData(newData); setError(null); }
+      catch (e) { setError('儲存失敗：' + e.message); }
+    }
   }
 
   const renderPage = () => {
@@ -488,14 +484,14 @@ function App() {
       case 'budget': return <BudgetPage data={data} onUpdate={updateData} />;
       case 'reports': return <ReportsPage data={data} />;
       case 'loans': return <LoansPage data={data} onUpdate={updateData} />;
-      case 'settings': return <SettingsPage onSignOut={signOut} onRefresh={loadUserData} error={error} />;
+      case 'settings': return <SettingsPage signedIn={signedIn} onSignIn={signIn} onSignOut={signOut} onRefresh={loadUserData} error={error} />;
       default: return <DashboardPage data={data} />;
     }
   };
 
   return (
     <div className="app-layout">
-      <Sidebar activePage={activePage} setActivePage={setActivePage} onSignOut={signOut} />
+      <Sidebar activePage={activePage} setActivePage={setActivePage} signedIn={signedIn} onSignIn={signIn} onSignOut={signOut} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="main-content">{renderPage()}</div>
       </div>
