@@ -1,3 +1,6 @@
+// 應用程式版本號（每次更動 +1：V1.0.0 → V1.0.1 → … → V1.0.99 → V1.1.0）
+export const APP_VERSION = 'V1.0.1';
+
 // Google OAuth 設定
 // TODO: 填入你的 OAuth Client ID（建立後貼到這裡）
 export const GOOGLE_CLIENT_ID = '571410634682-1s7aqci429g3nin2ga8kctf7kdcao1lr.apps.googleusercontent.com';

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './index.css';
 import { initGoogleAuth, signIn, signOut, isSignedIn, setTokenChangeHandler } from './googleAuth';
 import { loadData, saveData } from './drive';
-import { DEMO_DATA } from './config';
+import { DEMO_DATA, APP_VERSION } from './config';
 
 // ── 工具函數 ──
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -122,6 +122,7 @@ function DashboardPage({ data }) {
           </table>
         </div>
       </div>
+      <div style={{ position: 'fixed', top: 16, right: 20, fontSize: 12, color: 'var(--text-muted)', zIndex: 10 }}>版本 {APP_VERSION}</div>
     </div>
   );
 }
