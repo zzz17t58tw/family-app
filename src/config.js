@@ -1,8 +1,9 @@
 // 應用程式版本號（每次更動 +1：V1.0.0 → V1.0.1 → … → V1.0.99 → V1.1.0）
-export const APP_VERSION = 'V1.0.3';
+export const APP_VERSION = 'V1.0.4';
 
 // 版本更新紀錄（新版本加在最前面）
 export const CHANGELOG = [
+  { version: 'V1.0.4', desc: '支援多幣種（台幣/美金）帳戶與自動匯率折算' },
   { version: 'V1.0.3', desc: '加入刪除帳戶功能並修復操作 bug' },
   { version: 'V1.0.2', desc: '加入版本更新紀錄與 ℹ️ 查詢按鈕' },
   { version: 'V1.0.1', desc: '版本號移到右上角' },
@@ -10,7 +11,6 @@ export const CHANGELOG = [
 ];
 
 // Google OAuth 設定
-// TODO: 填入你的 OAuth Client ID（建立後貼到這裡）
 export const GOOGLE_CLIENT_ID = '571410634682-1s7aqci429g3nin2ga8kctf7kdcao1lr.apps.googleusercontent.com';
 
 // 需要的 Google API 權限（先只留必要的 Drive 讀寫，Sheets/日曆之後再加）
@@ -25,9 +25,10 @@ export const DATA_FILE_NAME = 'data.json';
 // 首次登入建立的示範資料
 export const DEMO_DATA = {
   accounts: [
-    { id: 'a1', name: '銀行帳戶', type: 'bank', balance: 1250000 },
-    { id: 'a2', name: '電子錢包', type: 'wallet', balance: 45000 },
-    { id: 'a3', name: '投資帳戶', type: 'investment', balance: 1555000 },
+    { id: 'a1', name: '銀行帳戶', type: 'bank', currency: 'TWD', balance: 1250000 },
+    { id: 'a2', name: '電子錢包', type: 'wallet', currency: 'TWD', balance: 45000 },
+    { id: 'a3', name: '投資帳戶', type: 'investment', currency: 'TWD', balance: 1555000 },
+    { id: 'a4', name: '美金投資帳戶', type: 'investment', currency: 'USD', balance: 8000 },
   ],
   transactions: [
     { id: 't1', date: '2025-01-15', desc: '薪資收入', amount: 85000, type: 'income', category: '薪資', accountId: 'a1' },
@@ -35,6 +36,7 @@ export const DEMO_DATA = {
     { id: 't3', date: '2025-01-13', desc: '捷運月票', amount: -1200, type: 'expense', category: '交通', accountId: 'a2' },
     { id: 't4', date: '2025-01-12', desc: '水電費', amount: -3500, type: 'expense', category: '生活', accountId: 'a1' },
     { id: 't5', date: '2025-01-11', desc: '股票股息', amount: 8000, type: 'income', category: '投資', accountId: 'a3' },
+    { id: 't6', date: '2025-01-10', desc: '美金股息', amount: 120, type: 'income', category: '投資', accountId: 'a4' },
   ],
   budgets: [
     { category: '飲食', limit: 20000 },
@@ -45,4 +47,8 @@ export const DEMO_DATA = {
   loans: [
     { id: 'l1', name: '房貸', total: 8000000, rate: 2.1, payDay: 5, monthly: 35000 },
   ],
+  rates: {
+    usdToTwd: 31.8,
+    updatedAt: '',
+  },
 };

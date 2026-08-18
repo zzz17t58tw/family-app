@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './index.css';
 import { initGoogleAuth, signIn, signOut, isSignedIn, setTokenChangeHandler } from './googleAuth';
 import { loadData, saveData } from './drive';
@@ -6,25 +6,38 @@ import { DEMO_DATA, APP_VERSION, CHANGELOG } from './config';
 
 // ── 工具函數 ──
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-function fmt(n) { return 'NT$ ' + Math.abs(n).toLocaleString(); }
 function today() { return new Date().toISOString().slice(0, 10); }
 function accName(data, id) { const a = (data.accounts || []).find(x => x.id === id); return a ? a.name : '—'; }
+// 帳戶幣別（舊資料沒有 currency 時預設台幣）
+function accCurrency(data, id) { const a = (data.accounts || []).find(x => x.id === id); return a ? (a.currency || 'TWD') : 'TWD'; }
+// 目前美金→台幣匯率（資料沒有時給一個合理預設值）
+function usdRate(data) { return (data.rates && data.rates.usdToTwd) || 31.5; }
+// 金額格式：依幣別顯示
+function fmt(n, currency) {
+  const v = Math.abs(n).toLocaleString();
+  return currency === 'USD' ? 'US$ ' + v : 'NT$ ' + v;
+}
+// 把一筆金額換算成台幣（美金乘以匯率）
+function toTWD(amount, currency, data) { return currency === 'USD' ? amount * usdRate(data) : amount; }
+// 一筆交易 → 台幣等值（依交易所屬帳戶的幣別）
+function txTWD(t, data) { return toTWD(t.amount, accCurrency(data, t.accountId), data); }
 
-// 計算總資產
+// 計算總資產（統一換算成台幣）
 function totalAssets(data) {
-  return (data.accounts || []).reduce((s, a) => s + (a.balance || 0), 0);
+  return (data.accounts || []).reduce((s, a) => s + toTWD(a.balance || 0, a.currency || 'TWD', data), 0);
 }
-// 可動用資金（銀行 + 電子錢包，不含投資）
+// 可動用資金（銀行 + 電子錢包，不含投資，換算台幣）
 function liquidFunds(data) {
-  return (data.accounts || []).reduce((s, a) => s + ((a.type === 'bank' || a.type === 'wallet') ? (a.balance || 0) : 0), 0);
+  return (data.accounts || []).reduce((s, a) => s + ((a.type === 'bank' || a.type === 'wallet') ? toTWD(a.balance || 0, a.currency || 'TWD', data) : 0), 0);
 }
-// 本月收支
+// 本月收支（換算台幣）
 function monthlySummary(data) {
   const m = today().slice(0, 7);
   let income = 0, expense = 0;
   (data.transactions || []).forEach(t => {
     if (!t.date || !t.date.startsWith(m)) return;
-    if (t.amount > 0) income += t.amount; else expense += Math.abs(t.amount);
+    const v = txTWD(t, data);
+    if (v > 0) income += v; else expense += Math.abs(v);
   });
   return { income, expense, saving: income > 0 ? Math.round((income - expense) / income * 1000) / 10 : 0 };
 }
@@ -84,7 +97,7 @@ function DashboardPage({ data }) {
         <p className="page-subtitle">你的財務總覽</p>
       </div>
       <div className="stats-grid">
-        <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">總資產</span><div className="stat-card-icon assets">💎</div></div><div className="stat-card-value">{fmt(assets)}</div></div>
+        <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">總資產</span><div className="stat-card-icon assets">💎</div></div><div className="stat-card-value">{fmt(assets)}</div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>含美金 · 1 USD ≈ {usdRate(data).toLocaleString()} TWD</div></div>
         <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">本月收入</span><div className="stat-card-icon income">📈</div></div><div className="stat-card-value">{fmt(income)}</div></div>
         <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">本月支出</span><div className="stat-card-icon expense">📉</div></div><div className="stat-card-value">{fmt(expense)}</div></div>
         <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">可動用資金</span><div className="stat-card-icon savings">💵</div></div><div className="stat-card-value">{fmt(liquid)}</div></div>
@@ -93,13 +106,15 @@ function DashboardPage({ data }) {
         <div className="card-header"><h3 className="card-title">帳戶概覽</h3></div>
         <div className="table-container">
           <table>
-            <thead><tr><th>帳戶名稱</th><th>類型</th><th>餘額</th></tr></thead>
+            <thead><tr><th>帳戶名稱</th><th>類型</th><th>幣別</th><th>餘額</th><th>折合台幣</th></tr></thead>
             <tbody>
               {(data.accounts || []).map(a => (
                 <tr key={a.id}>
                   <td>{a.name}</td>
                   <td><span className="badge badge-info">{a.type === 'bank' ? '銀行' : a.type === 'wallet' ? '電子錢包' : '投資'}</span></td>
-                  <td>{fmt(a.balance)}</td>
+                  <td>{(a.currency || 'TWD') === 'USD' ? '💵 美金' : '💰 台幣'}</td>
+                  <td>{fmt(a.balance, a.currency)}</td>
+                  <td>{fmt(toTWD(a.balance || 0, a.currency || 'TWD', data))}</td>
                 </tr>
               ))}
             </tbody>
@@ -116,7 +131,7 @@ function DashboardPage({ data }) {
                 <tr key={t.id}>
                   <td>{t.date}</td><td>{t.desc}</td>
                   <td><span className={`badge ${t.amount > 0 ? 'badge-success' : 'badge-warning'}`}>{t.category}</span></td>
-                  <td style={{ color: t.amount > 0 ? 'var(--success)' : 'var(--danger)' }}>{t.amount > 0 ? '+' : ''}{fmt(t.amount)}</td>
+                  <td style={{ color: t.amount > 0 ? 'var(--success)' : 'var(--danger)' }}>{t.amount > 0 ? '+' : ''}{fmt(t.amount, accCurrency(data, t.accountId))}</td>
                 </tr>
               ))}
             </tbody>
@@ -168,7 +183,7 @@ function TransactionsPage({ data, onUpdate }) {
             <option value="expense">支出</option><option value="income">收入</option>
           </select>
           <input className="form-select" style={{ width: 200 }} placeholder="描述（例如：超市購物）" value={form.desc} onChange={e => setForm({ ...form, desc: e.target.value })} />
-          <input className="form-select" style={{ width: 130 }} type="number" placeholder="金額" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
+          <input className="form-select" style={{ width: 130 }} type="number" placeholder={accCurrency(data, form.accountId) === 'USD' ? '美金金額' : '金額'} value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
           <select className="form-select" style={{ width: 120 }} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
             {['飲食','交通','生活','娛樂','薪資','投資','醫療','教育','其他'].map(c => <option key={c}>{c}</option>)}
           </select>
@@ -190,7 +205,7 @@ function TransactionsPage({ data, onUpdate }) {
                   <td>{t.date}</td><td>{t.desc}</td>
                   <td><span className={`badge ${t.amount > 0 ? 'badge-success' : 'badge-warning'}`}>{t.category}</span></td>
                   <td>{accName(data, t.accountId)}</td>
-                  <td style={{ color: t.amount > 0 ? 'var(--success)' : 'var(--danger)' }}>{t.amount > 0 ? '+' : ''}{fmt(t.amount)}</td>
+                  <td style={{ color: t.amount > 0 ? 'var(--success)' : 'var(--danger)' }}>{t.amount > 0 ? '+' : ''}{fmt(t.amount, accCurrency(data, t.accountId))}</td>
                   <td><button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => delTx(t.id)}>刪除</button></td>
                 </tr>
               ))}
@@ -206,10 +221,12 @@ function TransactionsPage({ data, onUpdate }) {
 // ── 帳戶管理（餘額 + 轉帳）──
 function AccountsPage({ data, onUpdate }) {
   const [form, setForm] = useState({ fromId: '', toId: '', amount: '' });
-  const [newAcc, setNewAcc] = useState({ name: '', type: 'bank', balance: '' });
+  const [newAcc, setNewAcc] = useState({ name: '', type: 'bank', currency: 'TWD', balance: '' });
   function transfer() {
     const amt = parseFloat(form.amount);
     if (!form.fromId || !form.toId || form.fromId === form.toId || isNaN(amt) || amt <= 0) { alert('請填寫正確的轉帳資訊'); return; }
+    const fromCur = accCurrency(data, form.fromId), toCur = accCurrency(data, form.toId);
+    if (fromCur !== toCur) { alert('跨幣別轉帳（換匯）尚未支援，請先在同幣別帳戶間轉帳'); return; }
     const accounts = data.accounts.map(a => a.id === form.fromId ? { ...a, balance: a.balance - amt } : a.id === form.toId ? { ...a, balance: a.balance + amt } : a);
     const tx = { id: genId(), date: today(), desc: '帳戶轉帳', amount: -amt, type: 'expense', category: '轉帳', accountId: form.fromId };
     onUpdate({ ...data, accounts, transactions: [tx, ...data.transactions] });
@@ -218,8 +235,8 @@ function AccountsPage({ data, onUpdate }) {
   function addAccount() {
     const bal = parseFloat(newAcc.balance);
     if (!newAcc.name || isNaN(bal)) { alert('請填寫帳戶名稱與餘額'); return; }
-    onUpdate({ ...data, accounts: [...data.accounts, { id: genId(), name: newAcc.name, type: newAcc.type, balance: bal }] });
-    setNewAcc({ name: '', type: 'bank', balance: '' });
+    onUpdate({ ...data, accounts: [...data.accounts, { id: genId(), name: newAcc.name, type: newAcc.type, currency: newAcc.currency, balance: bal }] });
+    setNewAcc({ name: '', type: 'bank', currency: 'TWD', balance: '' });
   }
   function deleteAccount(id, name) {
     if (!window.confirm('確定刪除「' + name + '」？')) return;
@@ -232,7 +249,8 @@ function AccountsPage({ data, onUpdate }) {
         {(data.accounts || []).map(a => (
           <div key={a.id} className="stat-card">
             <div className="stat-card-header"><span className="stat-card-label">{a.name}</span><div className={`stat-card-icon ${a.type === 'bank' ? 'assets' : a.type === 'wallet' ? 'savings' : 'income'}`}>{a.type === 'bank' ? '🏦' : a.type === 'wallet' ? '💳' : '📈'}</div></div>
-            <div className="stat-card-value">{fmt(a.balance)}</div>
+            <div className="stat-card-value">{fmt(a.balance, a.currency)}</div>
+            {(a.currency || 'TWD') === 'USD' && <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 12px' }}>≈ {fmt(toTWD(a.balance || 0, 'USD', data))}</div>}
             <div style={{ padding: '0 12px 10px', display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => deleteAccount(a.id, a.name)}>刪除</button>
             </div>
@@ -259,6 +277,9 @@ function AccountsPage({ data, onUpdate }) {
           <select className="form-select" style={{ width: 140 }} value={newAcc.type} onChange={e => setNewAcc({ ...newAcc, type: e.target.value })}>
             <option value="bank">銀行</option><option value="wallet">電子錢包</option><option value="investment">投資</option>
           </select>
+          <select className="form-select" style={{ width: 120 }} value={newAcc.currency} onChange={e => setNewAcc({ ...newAcc, currency: e.target.value })}>
+            <option value="TWD">台幣</option><option value="USD">美金</option>
+          </select>
           <input className="form-select" style={{ width: 150 }} type="number" placeholder="初始餘額" value={newAcc.balance} onChange={e => setNewAcc({ ...newAcc, balance: e.target.value })} />
           <button className="btn btn-primary" onClick={addAccount}>+ 新增帳戶</button>
         </div>
@@ -272,7 +293,7 @@ function BudgetPage({ data, onUpdate }) {
   const [form, setForm] = useState({ category: '飲食', limit: '' });
   const m = today().slice(0, 7);
   const spentByCat = {};
-  (data.transactions || []).forEach(t => { if (t.date && t.date.startsWith(m) && t.amount < 0) spentByCat[t.category] = (spentByCat[t.category] || 0) + Math.abs(t.amount); });
+  (data.transactions || []).forEach(t => { if (t.date && t.date.startsWith(m) && t.amount < 0) spentByCat[t.category] = (spentByCat[t.category] || 0) + Math.abs(txTWD(t, data)); });
   function addBudget() {
     const lim = parseFloat(form.limit);
     if (isNaN(lim) || lim <= 0) { alert('請填寫預算上限'); return; }
@@ -327,11 +348,17 @@ function BudgetPage({ data, onUpdate }) {
 // ── 報表分析（圖表）──
 function ReportsPage({ data }) {
   const catSpent = {};
-  (data.transactions || []).forEach(t => { if (t.amount < 0) catSpent[t.category] = (catSpent[t.category] || 0) + Math.abs(t.amount); });
+  (data.transactions || []).forEach(t => { if (t.amount < 0) catSpent[t.category] = (catSpent[t.category] || 0) + Math.abs(txTWD(t, data)); });
   const cats = Object.entries(catSpent).sort((a, b) => b[1] - a[1]);
   const max = Math.max(...cats.map(c => c[1]), 1);
   const months = {};
-  (data.transactions || []).forEach(t => { if (!t.date) return; const m = t.date.slice(0, 7); if (t.amount > 0) months[m] = (months[m] || { i: 0, e: 0 }) && { i: (months[m]?.i || 0) + t.amount, e: months[m]?.e || 0 }; else months[m] = { i: months[m]?.i || 0, e: (months[m]?.e || 0) + Math.abs(t.amount) }; });
+  (data.transactions || []).forEach(t => {
+    if (!t.date) return;
+    const m = t.date.slice(0, 7);
+    const v = txTWD(t, data);
+    if (!months[m]) months[m] = { i: 0, e: 0 };
+    if (v > 0) months[m].i += v; else months[m].e += Math.abs(v);
+  });
   const monList = Object.keys(months).sort().slice(-6);
   const maxMon = Math.max(...monList.map(m => Math.max(months[m].i, months[m].e)), 1);
   return (
@@ -424,10 +451,30 @@ function LoansPage({ data, onUpdate }) {
 }
 
 // ── 設定 ──
-function SettingsPage({ signedIn, onSignIn, onSignOut, onRefresh, error }) {
+function SettingsPage({ signedIn, onSignIn, onSignOut, onRefresh, error, rate, rateUpdatedAt, onRefreshRate, onSetRateManual }) {
+  const [manualRate, setManualRate] = useState('');
   return (
     <div>
       <div className="page-header"><h1 className="page-title">設定</h1><p className="page-subtitle">帳戶與同步</p></div>
+      <div className="card" style={{ maxWidth: 480, marginBottom: 24 }}>
+        <div className="card-header"><h3 className="card-title">匯率設定（美金 → 台幣）</h3></div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '0 20px 20px' }}>
+          <p style={{ fontSize: 14 }}>
+            目前匯率：<strong>1 USD = {rate.toLocaleString()} TWD</strong>
+            <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 8 }}>
+              {rateUpdatedAt ? '更新於 ' + new Date(rateUpdatedAt).toLocaleString('zh-TW') : '尚未自動更新'}
+            </span>
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" onClick={onRefreshRate}>立即更新匯率</button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input className="form-select" style={{ width: 160 }} type="number" step="0.01" placeholder="手動輸入匯率" value={manualRate} onChange={e => setManualRate(e.target.value)} />
+            <button className="btn btn-secondary" onClick={() => { onSetRateManual(manualRate); setManualRate(''); }}>套用</button>
+          </div>
+          <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>自動更新失敗時，可用手動輸入。總資產、報表會依此匯率把美金折成台幣。</p>
+        </div>
+      </div>
       <div className="card" style={{ maxWidth: 480 }}>
         <div className="card-header"><h3 className="card-title">帳戶</h3></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '0 20px 20px' }}>
@@ -459,6 +506,34 @@ function App() {
   const [error, setError] = useState(null);
   const [activePage, setActivePage] = useState('dashboard');
 
+  const signedInRef = useRef(false);
+  function setSignedInBoth(v) { signedInRef.current = v; setSignedIn(v); }
+
+  async function refreshRate() {
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/USD');
+      const j = await res.json();
+      const twd = j.rates && j.rates.TWD;
+      if (!twd) throw new Error('no TWD rate');
+      setData(prev => {
+        const next = { ...prev, rates: { usdToTwd: twd, updatedAt: new Date().toISOString() } };
+        if (signedInRef.current) saveData(next).catch(() => {});
+        return next;
+      });
+    } catch (e) {
+      console.warn('匯率自動更新失敗，沿用舊匯率：', e);
+    }
+  }
+  function setManualRate(val) {
+    const v = parseFloat(val);
+    if (isNaN(v) || v <= 0) { alert('請輸入有效的匯率'); return; }
+    setData(prev => {
+      const next = { ...prev, rates: { usdToTwd: v, updatedAt: new Date().toISOString() } };
+      if (signedInRef.current) saveData(next).catch(() => {});
+      return next;
+    });
+  }
+
   async function loadUserData() {
     setLoading(true);
     setError(null);
@@ -475,24 +550,27 @@ function App() {
   useEffect(() => {
     setTokenChangeHandler(async (token) => {
       if (token) {
-        setSignedIn(true);
+        setSignedInBoth(true);
         await loadUserData();
+        refreshRate();
       } else {
-        setSignedIn(false);
+        setSignedInBoth(false);
         setData(JSON.parse(JSON.stringify(DEMO_DATA)));
       }
     });
     initGoogleAuth(() => {
       if (isSignedIn()) {
-        setSignedIn(true);
-        loadUserData();
+        setSignedInBoth(true);
+        loadUserData().then(() => refreshRate());
+      } else {
+        refreshRate();
       }
     });
   }, []);
 
   async function updateData(newData) {
     setData(newData);
-    if (signedIn) {
+    if (signedInRef.current) {
       try { await saveData(newData); setError(null); }
       catch (e) { setError('儲存失敗：' + e.message); }
     }
@@ -507,7 +585,7 @@ function App() {
       case 'budget': return <BudgetPage data={data} onUpdate={updateData} />;
       case 'reports': return <ReportsPage data={data} />;
       case 'loans': return <LoansPage data={data} onUpdate={updateData} />;
-      case 'settings': return <SettingsPage signedIn={signedIn} onSignIn={signIn} onSignOut={signOut} onRefresh={loadUserData} error={error} />;
+      case 'settings': return <SettingsPage signedIn={signedIn} onSignIn={signIn} onSignOut={signOut} onRefresh={loadUserData} error={error} rate={usdRate(data)} rateUpdatedAt={data.rates && data.rates.updatedAt} onRefreshRate={refreshRate} onSetRateManual={setManualRate} />;
       default: return <DashboardPage data={data} />;
     }
   };
