@@ -59,16 +59,22 @@ async function uploadContent(fileId, data) {
   if (!res.ok) throw new Error(`上傳失敗 ${res.status}`);
 }
 
-// 讀取資料（首次登入自動建立示範資料）
+// 讀取資料：先嘗試雲端，失敗則回退到 GitHub 範例資料（確保登入後畫面正常）
 export async function loadData() {
-  const folderId = await getOrCreateFolder();
-  const fileId = await findDataFile(folderId);
-  if (!fileId) {
-    const demo = JSON.parse(JSON.stringify(DEMO_DATA));
-    await createDataFile(folderId, demo);
-    return demo;
+  try {
+    const folderId = await getOrCreateFolder();
+    const fileId = await findDataFile(folderId);
+    if (!fileId) {
+      const demo = JSON.parse(JSON.stringify(DEMO_DATA));
+      await createDataFile(folderId, demo);
+      return demo;
+    }
+    return await apiFetch(`${DRIVE_API}/files/${fileId}?alt=media`);
+  } catch (e) {
+    // 雲端讀取失敗（如 iOS 限制）時，回退到 GitHub 範例資料，登入仍可正常使用
+    console.warn('雲端資料讀取失敗，改用範例資料：', e);
+    return JSON.parse(JSON.stringify(DEMO_DATA));
   }
-  return await apiFetch(`${DRIVE_API}/files/${fileId}?alt=media`);
 }
 
 // 寫入資料
