@@ -2,11 +2,9 @@
 // TODO: 填入你的 OAuth Client ID（建立後貼到這裡）
 export const GOOGLE_CLIENT_ID = '571410634682-1s7aqci429g3nin2ga8kctf7kdcao1lr.apps.googleusercontent.com';
 
-// 需要的 Google API 權限
+// 需要的 Google API 權限（先只留必要的 Drive 讀寫，Sheets/日曆之後再加）
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',      // 讀寫 app 建立的檔案
-  'https://www.googleapis.com/auth/spreadsheets',     // Sheets 快照
-  'https://www.googleapis.com/auth/calendar.events',  // 日曆提醒
 ].join(' ');
 
 // Drive 資料夾與檔案名稱
