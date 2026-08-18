@@ -15,8 +15,13 @@ async function apiFetch(url, options = {}) {
     },
   });
   if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`API ${res.status}: ${err}`);
+    const errText = await res.text().catch(() => '');
+    let detail = errText;
+    try {
+      const j = JSON.parse(errText);
+      detail = j.error?.message || errText;
+    } catch (e) { /* ignore */ }
+    throw new Error(`Google API 錯誤 (${res.status})：${detail}`);
   }
   const text = await res.text();
   return text ? JSON.parse(text) : null;

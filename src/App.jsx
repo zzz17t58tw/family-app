@@ -486,9 +486,11 @@ function App() {
         <div className="card" style={{ maxWidth: 440, width: '90%', textAlign: 'center', padding: '32px 24px' }}>
           <div style={{ fontSize: 40 }}>⚠️</div>
           <h2 style={{ margin: '12px 0 8px' }}>資料載入失敗</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13, wordBreak: 'break-all', marginBottom: 20 }}>{error || '未知錯誤'}</p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13, wordBreak: 'break-all', marginBottom: 12 }}>把下面的錯誤訊息告訴我，我就能修好：</p>
+          <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '12px 14px', fontSize: 13, color: 'var(--danger)', wordBreak: 'break-all', marginBottom: 20, textAlign: 'left', lineHeight: 1.6 }}>{error || '未知錯誤'}</div>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={loadUserData}>重新載入</button>
+            <button className="btn btn-secondary" onClick={() => { try { navigator.clipboard.writeText(error || ''); } catch(e){} }}>複製錯誤</button>
             <button className="btn btn-secondary" onClick={signOut}>登出重試</button>
           </div>
         </div>
