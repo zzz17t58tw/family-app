@@ -479,6 +479,23 @@ function App() {
     return <LoginScreen onSignIn={signIn} error={error} />;
   }
 
+  // 登入成功但資料載入失敗（顯示錯誤而非白屏）
+  if (!data && !loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', padding: 24 }}>
+        <div className="card" style={{ maxWidth: 440, width: '90%', textAlign: 'center', padding: '32px 24px' }}>
+          <div style={{ fontSize: 40 }}>⚠️</div>
+          <h2 style={{ margin: '12px 0 8px' }}>資料載入失敗</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13, wordBreak: 'break-all', marginBottom: 20 }}>{error || '未知錯誤'}</p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button className="btn btn-primary" onClick={loadUserData}>重新載入</button>
+            <button className="btn btn-secondary" onClick={signOut}>登出重試</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const renderPage = () => {
     if (loading) return <p style={{ color: 'var(--text-secondary)' }}>載入資料中…</p>;
     switch (activePage) {
