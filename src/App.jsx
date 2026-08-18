@@ -14,6 +14,10 @@ function accName(data, id) { const a = (data.accounts || []).find(x => x.id === 
 function totalAssets(data) {
   return (data.accounts || []).reduce((s, a) => s + (a.balance || 0), 0);
 }
+// 可動用資金（銀行 + 電子錢包，不含投資）
+function liquidFunds(data) {
+  return (data.accounts || []).reduce((s, a) => s + ((a.type === 'bank' || a.type === 'wallet') ? (a.balance || 0) : 0), 0);
+}
 // 本月收支
 function monthlySummary(data) {
   const m = today().slice(0, 7);
@@ -69,7 +73,8 @@ function Sidebar({ activePage, setActivePage, signedIn, onSignIn, onSignOut }) {
 // ── 儀表板 ──
 function DashboardPage({ data }) {
   const assets = totalAssets(data);
-  const { income, expense, saving } = monthlySummary(data);
+  const { income, expense } = monthlySummary(data);
+  const liquid = liquidFunds(data);
   const recent = [...(data.transactions || [])].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 8);
   return (
     <div>
@@ -81,7 +86,7 @@ function DashboardPage({ data }) {
         <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">總資產</span><div className="stat-card-icon assets">💎</div></div><div className="stat-card-value">{fmt(assets)}</div></div>
         <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">本月收入</span><div className="stat-card-icon income">📈</div></div><div className="stat-card-value">{fmt(income)}</div></div>
         <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">本月支出</span><div className="stat-card-icon expense">📉</div></div><div className="stat-card-value">{fmt(expense)}</div></div>
-        <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">儲蓄率</span><div className="stat-card-icon savings">💰</div></div><div className="stat-card-value">{saving}%</div></div>
+        <div className="stat-card"><div className="stat-card-header"><span className="stat-card-label">可動用資金</span><div className="stat-card-icon savings">💵</div></div><div className="stat-card-value">{fmt(liquid)}</div></div>
       </div>
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="card-header"><h3 className="card-title">帳戶概覽</h3></div>
